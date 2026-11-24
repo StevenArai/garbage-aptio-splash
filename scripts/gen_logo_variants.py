@@ -59,8 +59,6 @@ def prepare(path: str, white_mode: str) -> Image.Image:
 
 def fit(image: Image.Image, width: int, height: int, mode: str) -> Image.Image:
     source_width, source_height = image.size
-    if mode == "stretch":
-        return image.resize((width, height), Image.LANCZOS)
     if mode == "crop":
         scale = max(width / source_width, height / source_height)
         resized_width = round(source_width * scale)
@@ -168,6 +166,21 @@ def main() -> None:
     geometries = [item.strip() for item in args.geometries.split(",") if item.strip()]
     quantizers = [item.strip() for item in args.quantizers.split(",") if item.strip()]
     dithers = [item.strip() for item in args.dithers.split(",") if item.strip()]
+
+    for item in geometries:
+        if item not in GEOMETRIES:
+            sys.exit(f"unknown geometry: {item}. Use crop or letterbox.")
+    for item in quantizers:
+        if item not in QUANTIZERS:
+            sys.exit(f"unknown quantizer: {item}. Use {', '.join(QUANTIZERS)}.")
+    for item in dithers:
+        if item not in DITHERS:
+            sys.exit(f"unknown dither: {item}. Use {', '.join(DITHERS)}.")
+    if source.width < args.width or source.height < args.height:
+        sys.exit(
+            f"source {source.width}x{source.height} is smaller than the canvas "
+            f"{args.width}x{args.height}. Do not upscale. Use a larger source image."
+        )
 
     print(f"source: {args.source} {source.width}x{source.height}")
     print(f"target: {args.width}x{args.height} 4bpp {NCOLORS} colors")

@@ -17,6 +17,27 @@ FIT_SIGNATURE = b"_FIT_   "
 SAMPLE_BYTES = 1024
 
 
+def fit_table_checksum(region: bytes, fit: int, count: int) -> int:
+    """Return the 8-bit checksum of the complete FIT table."""
+    return sum(region[fit:fit + count * 16]) & 0xFF
+
+
+def fit_has_table_checksum(region: bytes, fit: int) -> bool:
+    """Return True when the FIT header C_V bit requires a table checksum."""
+    return bool(region[fit + 14] & 0x80)
+
+
+def update_fit_checksum(rebuilt: bytearray, offset: int, fit: int, count: int) -> int:
+    """Set the FIT header checksum byte so the complete table sums to zero."""
+    checksum_at = offset + fit + 15
+    rebuilt[checksum_at] = 0
+    total = sum(rebuilt[offset + fit:offset + fit + count * 16]) & 0xFF
+    rebuilt[checksum_at] = (-total) & 0xFF
+    if sum(rebuilt[offset + fit:offset + fit + count * 16]) & 0xFF != 0:
+        raise AssertionError("FIT table checksum is not zero after the update")
+    return rebuilt[checksum_at]
+
+
 def find_fit(region: bytes) -> int:
     offsets = [i for i in range(len(region)) if region.startswith(FIT_SIGNATURE, i)]
     if not offsets:
@@ -41,9 +62,30 @@ def relocate(original: bytes, rebuilt: bytearray, offset: int, size: int) -> lis
     if rebuilt_region[fit:fit + 8] != FIT_SIGNATURE:
         raise ValueError("rebuilt image has no FIT at the original position")
 
-    count = int.from_bytes(original_region[fit + 8:fit + 11], "little")
-    if count < 2 or fit + count * 16 > size:
+    count = int.from_bytes(original_region[fit + 8:fit + 12], "little")
+    if count < 2 or count > 0x100 or fit + count * 16 > size:
         raise ValueError(f"FIT entry count is invalid: {count}")
+
+    version = int.from_bytes(original_region[fit + 12:fit + 14], "little")
+    if version != 0x0100:
+        print(f"warning: FIT version is 0x{version:04X}, expected 0x0100")
+    if original_region[fit + 14] & 0x7F != 0:
+        raise ValueError("FIT header type is not 0")
+
+    table_checksum = fit_table_checksum(original_region, fit, count)
+    has_table_checksum = fit_has_table_checksum(original_region, fit)
+    if has_table_checksum:
+        if table_checksum != 0:
+            raise ValueError(
+                "FIT header C_V=1 but the table checksum is invalid: "
+                f"sum=0x{table_checksum:02X}"
+            )
+        print(f"FIT header C_V=1. Table checksum is valid. checksum_byte=0x{original_region[fit + 15]:02X}")
+    else:
+        print(
+            "FIT header C_V=0. The table checksum is not used. "
+            f"checksum_byte=0x{original_region[fit + 15]:02X} table_sum=0x{table_checksum:02X}"
+        )
 
     image_start = (1 << 32) - size
     changes = []
@@ -78,7 +120,13 @@ def relocate(original: bytes, rebuilt: bytearray, offset: int, size: int) -> lis
     if not changes:
         raise ValueError("FIT has no Type-1 entry")
 
+    if has_table_checksum:
+        new_checksum = update_fit_checksum(rebuilt, offset, fit, count)
+        print(f"FIT table checksum updated to 0x{new_checksum:02X} (table sum is zero)")
+
     ffs = fit - 0x18
+    if ffs < 0:
+        raise ValueError("FIT FFS header is outside the region")
     if original_region[ffs + 19] & 0x40:
         raise ValueError("FIT FFS file has a data checksum flag. This script does not update it.")
     if original_region[ffs + 17] != 0xAA:

@@ -17,14 +17,22 @@ python scripts/build_compression_section.py original.ffs new.bmp new_section.bin
 
 The script checks these items:
 
-- The FFS file has a compression section with type `0x01`.
+- The FFS file size field equals the file length.
+- The compression section type is `0x01`.
 - The compression algorithm is `0x00`.
+- The compression section size equals the FFS body length.
+- The uncompressed length equals the raw section size plus the padding.
 - The raw section has type `0x19`.
+- The raw section size equals 4 plus the BMP length.
 - The BMP signature is `BM`.
-- The raw section padding is correct.
+- The BMP file size, DIB header size, width, height, plane count, bit depth, compression method, palette length, `bfOffBits`, `biSizeImage`, and pixel length are valid.
+- The new BMP has the same width, height, bit depth, palette length, header size, compression method, and `bfOffBits` as the original.
+- The section padding is zero.
+- The new section has a correct header, size fields, BMP bytes, and padding.
 
 The script keeps the original FFS layout.
 It writes a section file, not a full firmware image.
+Do not replace these checks with a visual inspection.
 
 ## Replace the section
 
@@ -80,9 +88,11 @@ A moved block needs a new address in the FIT.
 1. Search the BIOS region for the ASCII string `_FIT_   `.
 2. Stop if the string occurs more than one time.
 3. If the string does not occur, skip the relocation.
-4. Read the entry count from offset 8 of the FIT header.
-5. Process each Type-1 entry. The type is the low 7 bits of the byte at offset 14.
-6. Run the relocation script.
+4. Read the table size from offset 8 of the FIT header. The value is the entry count. Each entry is 16 bytes.
+5. Read the version from offset 12. The expected value is `0x0100`.
+6. Read the C_V bit. It is bit 7 of the byte at offset 14.
+7. Process each Type-1 entry. The type is the low 7 bits of the byte at offset 14.
+8. Run the relocation script.
 
 ```
 python scripts/relocate_fit.py original_region.bin result_region.bin fit_fixed.bin
@@ -102,14 +112,26 @@ The script does these steps:
 4. Finds the same sample near the old position in the rebuilt region.
 5. Writes the new address into the entry.
 6. Makes sure that the FIT FFS file has no data checksum.
+7. Updates the FIT table checksum when the C_V bit is 1.
 
 Stop if the sample has more than one near match.
 Do not guess the new address.
 
-Make sure that the FIT file checksum is still valid after the edit.
+Make sure that the FIT table checksum is valid after the edit.
+The Intel FIT rule is: when the C_V bit of the FIT header is 1, the byte sum of the whole table must be 0.
+The table size is the entry count times 16.
+The script sets the checksum byte at FIT offset 15 to make the sum 0.
+If the C_V bit is 0, the table checksum is not used.
+Do not add a checksum to a table that does not use one.
+The B85 reference table has C_V=0 and checksum byte `0x00`.
+Its table sum is not 0, and the board starts.
+The FFS data checksum is a different check. Check both.
+
 The reference B85 FIT FFS file has data checksum `0xAA` and no checksum flag.
 Other boards can use a real checksum.
-If the script stops on a checksum flag, update the FFS checksum with a tool.
+Stop if the script reports a data checksum flag.
+Do not guess the FFS checksum value.
+Use a tool that can update it, or change the plan.
 
 ## Variable area
 

@@ -14,6 +14,19 @@ GAS applies to miscellaneous boards with an old Aptio firmware.
 B75 and B85 are verified reference cases, not templates.
 Each board needs its own identification and backup.
 
+## Start here
+
+1. Stage 1: get the risk acceptance.
+2. Stage 2: identify the chip and make a full backup. Do not write before the backup passes.
+3. Stage 3: parse the image and make the candidates. Let the user choose.
+4. Stage 4: repack and check the structure.
+5. Stage 5: get the power promise and write only the BIOS region.
+6. Stage 6: export the rescue summary before the restart.
+
+Stop at each gate.
+Read the rest of this file for the full rules.
+Use the scripts for the binary checks. Do not do the binary checks by eye.
+
 ## Terms
 
 - Firmware image: the full data read from the flash chip.
@@ -82,15 +95,10 @@ Show the package outlines in `assets/reference-chips/package-outlines.svg`.
 The asset is original work under CC0.
 Do not ask the user to find a reference image.
 
-If flashrom does not support the chip, do these steps.
-
-1. Search for the chip datasheet.
-2. Read the JEDEC ID, the capacity, the sector size, and the erase and write commands.
-3. Add the chip entry to the flashrom source.
-4. Build a read-only flashrom first.
-5. Make sure that the read-only build reads the chip.
-6. Enable write support after the read-only build passes.
-
+If flashrom does not support the chip, state that the normal path is blocked.
+Do not modify flashrom by default.
+Use a programmer or another access method first.
+If the user agrees to an advanced path, read `references/flash-chip-support.md` and follow it.
 If you have no search tool, ask the user for the tavily MCP.
 Do not guess the command set from memory.
 
@@ -182,6 +190,16 @@ Read `references/image-pipeline.md` for the Pillow rules.
 14. Put the current variable area from the board into the new image.
 15. Run the minimal change checks in `references/repack-and-fit.md`.
 
+Use `scripts/build_compression_section.py` for the section.
+The script validates the original FFS, both BMP files, and the new section.
+Do not replace its checks with a visual inspection.
+
+`relocate_fit.py` reads the FIT header C_V bit.
+When C_V is 1, the whole FIT table must sum to 0.
+The script checks the table before the edit and updates the checksum byte after the edit.
+When C_V is 0, the table checksum is not used. Do not add one.
+The B85 reference table has C_V=0.
+
 The logo change can cause a full recompression of the FV.
 The raw byte difference can be large.
 Do not use the raw byte difference to measure the change.
@@ -239,6 +257,7 @@ Read `references/rescue-summary-template.md` for the template.
 - `references/image-pipeline.md`: two image routes, Pillow rules, dithering, and candidates.
 - `references/repack-and-fit.md`: size checks, offset checks, FIT relocation, variable area, and minimal change checks.
 - `references/flashing-and-recovery.md`: write commands, hash checks, and error recovery.
+- `references/flash-chip-support.md`: the optional advanced path for an unsupported flash chip.
 - `references/case-studies.md`: B75 and B85 observations. Use them as references, not as templates.
 - `references/rescue-summary-template.md`: the Markdown summary template.
 - `scripts/carve_logo.py`: find BMP data inside an image or an FFS file.

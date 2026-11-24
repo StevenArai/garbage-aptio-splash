@@ -44,6 +44,17 @@ python scripts/relocate_fit.py original.bin rebuilt.bin fixed.bin
 python scripts/verify_min_diff.py base.bin result.bin --ignore 0x400000:0x401000
 ```
 
+## Tests
+
+The tests use synthetic images. They do not need a board or a firmware file.
+
+```
+python -m pip install -r requirements.txt
+python -m unittest discover -s tests -v
+```
+
+The tests cover the BMP checks, the FFS section checks, the FIT relocation with both checksum cases, the minimal diff exit codes, the image generator, and the carve step.
+
 ## Safety
 
 A firmware write can stop the board from starting.
@@ -56,6 +67,7 @@ Do not restart, power off, or shut down during a write.
 - `SKILL.md`: the workflow and the hard rules.
 - `references/`: structure, image rules, repack, flash recovery, case studies, and the summary template.
 - `scripts/`: the helper scripts.
+- `tests/`: the automated checks.
 - `assets/reference-chips/`: an original CC0 package outline diagram.
 
 ## License
