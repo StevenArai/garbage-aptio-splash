@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+*.bin
+*.rom
+*.fd
+*.ffs
+carved_logos/
+logo_candidates/
